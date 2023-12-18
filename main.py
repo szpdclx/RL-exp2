@@ -14,7 +14,7 @@ BATCH_SIZE = 64
 LR = 0.00025
 GAMMA = 0.98
 SAVING_IETRATION = 1000  # 保存Checkpoint的间隔
-MEMORY_CAPACITY = 10000  # Memory的容量
+MEMORY_CAPACITY = 5000  # Memory的容量
 MIN_CAPACITY = 500  # 开始学习的下限
 Q_NETWORK_ITERATION = 10  # 同步target network的间隔
 EPSILON = 0.01  # epsilon-greedy
@@ -68,16 +68,17 @@ class Memory:
         self.buffer = collections.deque(maxlen=capacity)
 
     def set(self, data):
-        # TODO
         self.buffer.append(data)
 
-        pass
-
     def get(self, batch_size):
-        # TODO
         minibatch = random.sample(self.buffer, batch_size)
-        states, actions, rewards, next_states, dones = zip(*minibatch)
-        return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(dones)
+        states = np.array([data.state for data in minibatch])
+        actions = np.array([data.action for data in minibatch])
+        rewards = np.array([data.reward for data in minibatch])
+        next_states = np.array([data.next_state for data in minibatch])
+        dones = np.array([data.done for data in minibatch])
+        return states, actions, rewards, next_states, dones
+
 
 
 class DQN():
@@ -98,11 +99,15 @@ class DQN():
             # greedy policy
             action_value = self.eval_net.forward(state)
             action = torch.argmax(action_value).item()
-            action = action if ENV_A_SHAPE == 0 else action.reshape(ENV_A_SHAPE)
+            action = action
+            if ENV_A_SHAPE != 0 and isinstance(action, np.ndarray):
+                action = action.reshape(ENV_A_SHAPE)
         else:
             # random policy
             action = np.random.randint(0, NUM_ACTIONS)  # int random number
-            action = action if ENV_A_SHAPE == 0 else action.reshape(ENV_A_SHAPE)
+            action = action
+            if ENV_A_SHAPE != 0 and isinstance(action, np.ndarray):
+                action = action.reshape(ENV_A_SHAPE)
         return action
 
     def store_transition(self, data):
