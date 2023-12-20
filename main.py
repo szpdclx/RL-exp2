@@ -9,12 +9,12 @@ from torch.utils.tensorboard import SummaryWriter
 import collections
 
 # hyper-parameters
-EPISODES = 2000  # 训练/测试幕数
+EPISODES = 10000  # 训练/测试幕数
 BATCH_SIZE = 64
 LR = 0.00025
 GAMMA = 0.98
 SAVING_IETRATION = 1000  # 保存Checkpoint的间隔
-MEMORY_CAPACITY = 10000  # Memory的容量
+MEMORY_CAPACITY = 5000  # Memory的容量
 MIN_CAPACITY = 500  # 开始学习的下限
 Q_NETWORK_ITERATION = 10  # 同步target network的间隔
 EPSILON = 0.01  # epsilon-greedy
@@ -24,7 +24,7 @@ SAVE_PATH_PREFIX = './log/dqn/'
 TEST = False
 
 env = gym.make('CartPole-v1', render_mode="human" if TEST else None)
-# env = gym.make('MountainCar-v0', render_mode="human" if TEST else None)
+#env = gym.make('MountainCar-v0', render_mode="human" if TEST else None)
 # env = gym.make("LunarLander-v2",continuous=False,gravity=-10.0,enable_wind=True,wind_power=15.0,turbulence_power=1.5,render_mode="human" if TEST else None)
 
 
@@ -44,14 +44,16 @@ ENV_A_SHAPE = 0 if np.issubdtype(type(env.action_space.sample()),
 class Model(nn.Module):
     def __init__(self, num_inputs=4):
         super(Model, self).__init__()
-        self.linear = nn.Linear(NUM_STATES, 512)
-        self.linear2 = nn.Linear(512, NUM_ACTIONS)
+
+        self.linear = nn.Linear(NUM_STATES, 64)
+        self.linear2 = nn.Linear(64, 256)
+        self.linear3 = nn.Linear(256, NUM_ACTIONS)
 
     def forward(self, x):
         x = self.linear(x)
         x = F.relu(x)
-        x = self.linear2(x)
-        return x
+        x = F.relu(self.linear2(x))
+        return self.linear3(x)
 
 
 class Data:
@@ -88,8 +90,8 @@ class DQN():
         super(DQN, self).__init__()
         self.eval_net, self.target_net = Model().to(device), Model().to(device)
         self.learn_step_counter = 0
-        self.memory_counter = 0
-        self.memory = Memory(capacity=MEMORY_CAPACITY)
+        self.memory1_counter = 0
+        self.memory1 = Memory(capacity=MEMORY_CAPACITY)
         self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=LR)
         self.loss_func = nn.MSELoss()
 
@@ -111,8 +113,8 @@ class DQN():
         return action
 
     def store_transition(self, data):
-        self.memory.set(data)
-        self.memory_counter += 1
+        self.memory1.set(data)
+        self.memory1_counter += 1
 
     def learn(self):
         # update the parameters
@@ -126,7 +128,7 @@ class DQN():
         # TODO
 
         # Sample a batch of experiences from memory
-        states, actions, rewards, next_states, dones = self.memory.get(BATCH_SIZE)
+        states, actions, rewards, next_states, dones = self.memory1.get(BATCH_SIZE)
 
         states = torch.tensor(states, dtype=torch.float).to(device)
         actions = torch.tensor(actions, dtype=torch.long).to(device)
@@ -139,6 +141,7 @@ class DQN():
 
         # Compute Q values for next states
         q_next = self.target_net(next_states).detach()
+        #q_target = rewards + GAMMA * q_next.max(1)[0] * (1 - dones)
         q_target = rewards + GAMMA * q_next.max(1)[0] * (1 - dones)
 
         # Compute loss
